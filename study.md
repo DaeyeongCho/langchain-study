@@ -84,6 +84,7 @@ os.environ['OPENAI_API_KEY'] = os.environ.get('OPENAI_API_KEY')
 
 ## 1-2. LLM 체인 만들기
 
+
 ### 1-2-1. 기본 LLM 체인(Prompt + LLM)
 
 사용자의 입력(프롬프트)을 받아 LLM을 통해 응답이나 결과를 생성하는 구조
@@ -230,6 +231,7 @@ print(result2)
 
 ### 1-2-3. 체인을 실행하는 방법
 
+
 #### 1. LangChain의 "Runnable" 프로토콜
 
 "Runnable" 프로토콜: 사용자가 사용자 정의 체인을 쉽게 생성하고 관리할 수 있도록 설계된 핵심적인 개념   
@@ -315,4 +317,163 @@ async def run_async():
 asyncio.run(run_async())
 ```
 
+
 ## 1-3. 프롬프트(Prompt)
+
+사용자와 언어 모델 간 대화에서의 입력문   
+모델이 제공하는 응답 유형을 결정하는데 중요한 역할을 함
+
+
+### 1-3-1. 프롬프트 작성 원칙
+
+
+1. 명확성과 구체성   
+모호한 질문은 LLM 모델의 혼란 초래를 방지
+
+2. 배경 정보를 포함   
+환각 현상(hallucination) 발생 위험 감소, 관련성 높은 응답 생성
+
+3. 간결함   
+핵심 정보에 초점을 두고 불필요한 정보를 배제함   
+프롬프트가 길어지면 모델이 덜 중요한 부분에 집중할 수 있음
+
+4. 열린 질문 사용   
+자세하고 풍부한 답변을 제공하도록 유도
+
+5. 명확한 목표 설정   
+얻고자 하는 정보나 결과의 유형을 정확하게 정의하여 모델이 명확한 지침에 따라 응답을 생성하도록 도움
+
+6. 언어와 문체   
+모델이 상황에 맞는 표현을 선택하도록 함
+
+
+### 1-3-2. 프롬프트 템플릿(PromptTemplate)
+
+단일 문장 또는 명령을 입력하여 프롬프트를 구성할 수 있는 문자열 템플릿
+
+
+#### 1. 구성요소
+
+프롬프트 구성 시 다양한 구성요소 조합 가능
+
+구성 요소 | 내용
+----------|------------------------------------------------------------
+지시      | 언어 모델에게 어떤 작업을 수행하도록 요청하는 구체적인 지시 
+예시      | 요청된 작업을 수행하는 방법에 대한 하나 이상의 예시
+맥락      | 특정 작업을 수행하기 위한 추가적인 맥락
+질문      | 어떤 답변을 요구하는 구체적인 질문
+
+#### 2. 문자열 템플릿
+
+프롬프트 템플릿 인스턴스를 생성하고, 실제 입력값을 넣어 프롬프트를 완성하는 예제
+
+```py
+from langchain_core.prompts import PromptTemplate
+
+# 1. 'name'과 'age'라는 두 개의 변수를 사용하는 프롬프트 템플릿을 정의
+template_text = "안녕하세요, 제 이름은 {name}이고, 나이는 {age}살입니다."
+
+# 2. PromptTemplate 인스턴스를 생성
+prompt_template = PromptTemplate.from_template(template_text)
+
+# 3. 템플릿에 값을 채워서 프롬프트를 완성
+filled_prompt = prompt_template.format(name="홍길동", age=30)
+
+print(filled_prompt) 
+```
+
+#### 3. 프롬프트 템플릿 결합
+
+'+' 연산자를 통한 프롬프트 템플릿 간 결합을 통한 새로운 프롬프트 인스턴스 생성을 지원하는 예제
+
+```py
+# 위 예제에 이어서...
+
+# 문자열 템플릿 결합 (PromptTemplate + PromptTemplate + 문자열)
+combined_prompt = (
+              prompt_template
+              + PromptTemplate.from_template("\n\n아버지를 아버지라 부를 수 없습니다.")
+              + "\n\n{language}로 번역해주세요."
+)
+
+result = combined_prompt.format(name="홍길동", age=30, language="영어")
+
+print(result)
+```
+
+체인 생성 및 호출 예제
+
+```py
+# 위 예제에 이어서...
+
+from langchain_openai import ChatOpenAI
+from langchain_core.output_parsers import StrOutputParser
+
+llm = ChatOpenAI(model="gpt-4o-mini")
+chain = combined_prompt | llm | StrOutputParser()
+result = chain.invoke({"age":30, "language":"영어", "name":"홍길동"})
+
+print(result)
+```
+
+
+### 1-3-3. 챗 프롬프트 템플릿(ChatPromptTemplate)
+
+대화형 상황에서 여러 메시지 입력을 기반으로 단일 메시지 응답 생성에 활용
+
+
+#### 1. Message 유형
+
+* SystemMessage: 시스템의 기능 설명
+
+* HumanMessage: 사용자 질문
+
+* AIMessage: AI 모델의 응답을 제공합니다.
+
+* FunctionMessage: 특정 함수 호출의 결과를 나타냅니다.
+
+* ToolMessage: 도구 호출의 결과를 나타냅니다.
+
+#### 2. 2-튜플 형태의 메시지 리스트
+
+
+
+
+
+
+
+> 랭체인 관련 정리 추가하기
+
+
+
+
+
+
+
+
+# 2. RAG(Retrieval-Augmented Generation) 기법
+
+기존 대규모 언어 모델(LLM)을 확장하여, 주어진 질문에 대해 더 정확하고 풍부한 정보를 제공하는 방법   
+모델 학습 데이터에 포함되지 않은 외부 데이터를 실시간으로 검색(retrieval)하고, 이를 바탕으로 답변을 생성(generation)하는 과정을 포함함   
+환각 현상을 방지하고, 최신 정보를 반영, 더 넓은 지식을 활용할 수 있음
+
+#### 1. RAG 모델의 기본 구조
+
+* 검색 단계(Retrieval Phase): 사용자 질문을 입력으로 하여, 외부 데이터를 검색하는 단계   
+검색 엔진, DB 등의 소스에서 정보를 획득함   
+질문에 대한 답변을 생성하는데 적합하고 상세한 정보를 포함하는 것이 목표
+
+* 생성 단계(Generation Phase): 검색된 데이터를 기반으로 LLM 모델이 사용자의 질문에 답변하는 단계   
+검색된 정보와 기존 지식을 결합하여, 주어진 질문에 대한 답변을 생성함
+
+#### 2. RAG 모델의 장점
+
+* 풍부한 정보 제공: 검색을 통해 획득한 외부 데이터를 활용하여, 구체적이고 풍부한 정보 제공 가능
+
+* 실시간 정보 반영: 최신 데이터를 검색하여, 실시간 데이터 정보에 대응할 수 있음
+
+* 환각 방지: 실제 데이터 기반 답변을 생성함으로써, 환각 현상 발생의 위험을 줄이고 정확도를 높임
+
+
+## 2-1. RAG 개요
+
