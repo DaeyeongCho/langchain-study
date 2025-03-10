@@ -189,48 +189,133 @@ os.environ['OPENAI_API_KEY'] = os.environ.get('OPENAI_API_KEY')
 
 
 
-# 2-튜플 형태의 메시지 목록으로 프롬프트 생성 (type, content)
+# # 2-튜플 형태의 메시지 목록으로 프롬프트 생성 (type, content)
 
-from langchain_core.prompts import ChatPromptTemplate
+# from langchain_core.prompts import ChatPromptTemplate
 
-chat_prompt = ChatPromptTemplate.from_messages([
-    ("system", "이 시스템은 천문학 질문에 답변할 수 있습니다."),
-    ("user", "{user_input}"),
-])
+# chat_prompt = ChatPromptTemplate.from_messages([
+#     ("system", "이 시스템은 천문학 질문에 답변할 수 있습니다."),
+#     ("user", "{user_input}"),
+# ])
 
-messages = chat_prompt.format_messages(user_input="태양계에서 가장 큰 행성은 무엇인가요?")
-print(messages)
+# messages = chat_prompt.format_messages(user_input="태양계에서 가장 큰 행성은 무엇인가요?")
+# print(messages)
 
+
+
+
+# from langchain_openai import ChatOpenAI
+# from langchain_core.output_parsers import StrOutputParser
+
+# llm = ChatOpenAI(model="gpt-4o-mini")
+
+# chain = chat_prompt | llm | StrOutputParser()
+
+# result = chain.invoke({"user_input": "태양계에서 가장 큰 행성은 무엇인가요?"})
+
+# print(result)
+
+
+
+
+# # MessagePromptTemplate 활용
+
+# from langchain_core.prompts import SystemMessagePromptTemplate,  HumanMessagePromptTemplate
+
+# chat_prompt = ChatPromptTemplate.from_messages(
+#     [
+#         SystemMessagePromptTemplate.from_template("이 시스템은 천문학 질문에 답변할 수 있습니다."),
+#         HumanMessagePromptTemplate.from_template("{user_input}"),
+#     ]
+# )
+
+# messages = chat_prompt.format_messages(user_input="태양계에서 가장 큰 행성은 무엇인가요?")
+
+
+# print(messages)
+
+
+
+
+# Data Loader - 웹페이지 데이터 가져오기
+from langchain_community.document_loaders import WebBaseLoader
+
+# 위키피디아 정책과 지침
+url = 'https://ko.wikipedia.org/wiki/%EC%9C%84%ED%82%A4%EB%B0%B1%EA%B3%BC:%EC%A0%95%EC%B1%85%EA%B3%BC_%EC%A7%80%EC%B9%A8'
+loader = WebBaseLoader(url)
+
+# 웹페이지 텍스트 -> Documents
+docs = loader.load()
+
+print(len(docs))
+print(len(docs[0].page_content))
+print(docs[0].page_content[5000:6000])
+
+
+# Text Split (Documents -> small chunks: Documents)
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+splits = text_splitter.split_documents(docs)
+
+print(len(splits))
+print(splits[10])
+
+print()
+
+print(splits[10].page_content)
+
+print()
+
+print(splits[10].metadata)
+
+
+# Indexing (Texts -> Embedding -> Store)
+from langchain_community.vectorstores import Chroma
+from langchain_openai import OpenAIEmbeddings
+
+vectorstore = Chroma.from_documents(documents=splits,
+                                    embedding=OpenAIEmbeddings())
+
+docs = vectorstore.similarity_search("격하 과정에 대해서 설명해주세요.")
+print(len(docs))
+print(docs[0].page_content)
 
 
 
 from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
 from langchain_core.output_parsers import StrOutputParser
 
-llm = ChatOpenAI(model="gpt-4o-mini")
+# Prompt
+template = '''Answer the question based only on the following context:
+{context}
 
-chain = chat_prompt | llm | StrOutputParser()
+Question: {question}
+'''
 
-result = chain.invoke({"user_input": "태양계에서 가장 큰 행성은 무엇인가요?"})
+prompt = ChatPromptTemplate.from_template(template)
 
-print(result)
+# LLM
+model = ChatOpenAI(model='gpt-4o-mini', temperature=0)
 
+# Rretriever
+retriever = vectorstore.as_retriever()
 
+# Combine Documents
+def format_docs(docs):
+    return '\n\n'.join(doc.page_content for doc in docs)
 
-
-# MessagePromptTemplate 활용
-
-from langchain_core.prompts import SystemMessagePromptTemplate,  HumanMessagePromptTemplate
-
-chat_prompt = ChatPromptTemplate.from_messages(
-    [
-        SystemMessagePromptTemplate.from_template("이 시스템은 천문학 질문에 답변할 수 있습니다."),
-        HumanMessagePromptTemplate.from_template("{user_input}"),
-    ]
+# RAG Chain 연결
+rag_chain = (
+    {'context': retriever | format_docs, 'question': RunnablePassthrough()}
+    | prompt
+    | model
+    | StrOutputParser()
 )
 
-messages = chat_prompt.format_messages(user_input="태양계에서 가장 큰 행성은 무엇인가요?")
+# Chain 실행
+result = rag_chain.invoke("격하 과정에 대해서 설명해주세요.")
 
-
-print(messages)
-
+print(result)

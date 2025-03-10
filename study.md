@@ -477,3 +477,128 @@ print(result)
 
 ## 2-1. RAG 개요
 
+RAG 파이프라인은 기존 언어 모델에 검색 기능을 추가하여, 주어진 질문이나 문제에 대해 더 정확하고 풍부한 정보를 기반으로 답변을 생성함   
+RAG 파이프라인은 [데이터 로드 - 텍스트 분할 - 인덱싱 - 검색 - 생성]의 5단계로 구성됨
+
+#### 1 데이터 로드(Load Data)
+
+RAG에 사용할 데이터를 불러오는 단계   
+외부 데이터 소스에서 정보를 수집하고, 필요한 형식으로 변환하여 시스템에 로드함
+
+웹 크롤링을 통한 데이터 획득 예제
+
+```sh
+# langchain_community 모듈
+pip install langchain_community
+# bs4 모듈
+pip install beautifulsoup4
+```
+
+```py
+from langchain_community.document_loaders import WebBaseLoader
+
+# 웹페이지 데이터 가져오기
+url = 'https://ko.wikipedia.org/wiki/%EC%9C%84%ED%82%A4%EB%B0%B1%EA%B3%BC:%EC%A0%95%EC%B1%85%EA%B3%BC_%EC%A7%80%EC%B9%A8'
+loader = WebBaseLoader(url)
+
+# 웹페이지 텍스트 -> Documents
+docs = loader.load()
+
+print(len(docs)) # 문서 객체 개수
+print(len(docs[0].page_content)) # 문자열의 글자 개수
+print(docs[0].page_content[5000:6000]) # 문서의 일부
+```
+
+#### 2. 텍스트 분할(Text Split)
+
+불러온 데이터를 작은 크기의 단위(chunk)로 분할하는 단계   
+자연어 처리(NLP)기술을 활용하여 큰 문서를 처리가 쉽도록 문단, 문장, 구 단위로 나누는 작업   
+LLM 모델이나 API 입력 크기에 제한이 있을 수 있고, 프롬프트가 지나치게 긴 경우 중요 정보가 희석될 수 있으므로, 적정한 크기로 텍스트를 분할하는 과정이 필요함
+
+텍스트 분할 예제
+
+```py
+# Text Split (Documents -> small chunks: Documents)
+from langchain.text_splitter import RecursiveCharacterTextSplitter
+
+text_splitter = RecursiveCharacterTextSplitter(chunk_size=1000, chunk_overlap=200)
+splits = text_splitter.split_documents(docs)
+
+print(len(splits)) # 분할된 텍스트 조각(청크)의 개수
+print(splits[10].page_content) # 분할된 텍스트 조각 내용
+print(splits[10].metadata) # 원본 문서의 정보를 포함하는 메타데이터
+```
+
+#### 3. 인덱싱(Indexing)
+
+분할된 텍스트를 검색 가능한 형태로 만드는 단계   
+검색 시간을 단축시키고, 검색의 정확도를 높임   
+LangChain 라이브러리를 사용하여 [텍스트 임베딩 - 저장 - 유사성 검색]의 과정 수행
+
+
+```sh
+pip install chromadb
+```
+
+```py
+from langchain_community.vectorstores import Chroma
+from langchain_openai import OpenAIEmbeddings
+
+# OpenAI의 임베딩 모델을 사용하여 텍스트를 벡터로 변환하고, Chroma 벡터저장소에 저장함
+vectorstore = Chroma.from_documents(documents=splits,
+                                    embedding=OpenAIEmbeddings())
+
+docs = vectorstore.similarity_search("격하 과정에 대해서 설명해주세요.") # 사용자 쿼리를 통한 검색(임베딩 간의 거리(유사도)로 계산함)
+print(len(docs)) # 유사한 문서 개수
+print(docs[0].page_content) # 가장 유사한 문서 내용
+```
+
+#### 4. 검색(Retrieval)
+
+주어진 컨텍스트에 가장 관련된 정보를 찾는 과정   
+사용자 입력을 바탕으로 쿼리를 생성하고, 인덱싱된 데이터에서 가장 관련성 높은 정보 검색
+
+#### 5. 생성(Generation)
+
+<!-- 검색된 정보를 바탕으로 사용자 질문에 대한 답변을 생성하는 단계   
+모델은 사전 학습된 지식과 검색 결과를 결합하여 답변을 생성함
+
+```py
+from langchain_openai import ChatOpenAI
+from langchain_core.prompts import ChatPromptTemplate
+from langchain_core.runnables import RunnablePassthrough
+from langchain_core.output_parsers import StrOutputParser
+
+# 프롬프트 생성
+template = '''Answer the question based only on the following context:
+{context}
+
+Question: {question}
+'''
+
+prompt = ChatPromptTemplate.from_template(template)
+
+# LLM
+model = ChatOpenAI(model='gpt-4o-mini', temperature=0)
+
+# Rretriever
+retriever = vectorstore.as_retriever()
+
+# Combine Documents
+def format_docs(docs):
+    return '\n\n'.join(doc.page_content for doc in docs)
+
+# RAG Chain 연결
+rag_chain = (
+    {'context': retriever | format_docs, 'question': RunnablePassthrough()}
+    | prompt
+    | model
+    | StrOutputParser()
+)
+
+# Chain 실행
+rag_chain.invoke("격하 과정에 대해서 설명해주세요.")
+``` -->
+
+
+## 2-2. RAG - Document Loader
